@@ -1,0 +1,4919 @@
+
+# coding: utf-8
+
+# In[1]:
+
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import cm
+from __future__ import print_function
+import seaborn as sns
+from matplotlib.ticker import NullFormatter, MaxNLocator
+import matplotlib.ticker as ticker
+import plotly.graph_objects as go
+import scipy as sp
+from itertools import chain
+import matplotlib as mpl
+from matplotlib.lines import Line2D
+from scipy import spatial
+from scipy.spatial import ConvexHull
+from scipy.optimize import curve_fit
+from matplotlib import path
+from scipy.stats import probplot,shapiro, sem
+from scipy.interpolate import make_interp_spline
+from mpl_toolkits.mplot3d.axes3d import Axes3D
+from matplotlib.ticker import (AutoMinorLocator, MultipleLocator)
+from matplotlib import cm
+from numpy import linspace
+import pylab
+import os
+from scipy.ndimage import gaussian_filter
+
+
+# # initialization steps
+
+# In[2]:
+
+
+#protamine details
+#need to remove frames and simulations that are not necessary
+#only show equilibrated part
+#this is for salmon
+salmon_rg = pd.read_csv("~/protamine_simulation/jupyter_nb/salmon_rg.csv").iloc[:,:3]
+salmon_ree = pd.read_csv("~/protamine_simulation/jupyter_nb/salmon_ree.csv")
+salmon_rg_ree=pd.concat([salmon_rg,salmon_ree['Ree']],axis=1)
+salmon_rg_ree=salmon_rg_ree[salmon_rg_ree.sim!=2]
+salmon_rg_ree=salmon_rg_ree[salmon_rg_ree.sim!=11]
+#this step is because some salmon simulations have more than 200ns
+temp_df=salmon_rg_ree.copy()
+for sim in temp_df.sim.unique():
+    n=temp_df[temp_df.sim==sim].frames.max()-100000
+    if n>0:
+        temp_df.drop(temp_df[temp_df.sim==sim].tail(n).index,inplace=True)
+salmon_rg_ree=temp_df.copy()
+del temp_df
+#this step is taking last 40000 frames i.e. equilibrated portion
+blank_df = pd.DataFrame()
+for sim in salmon_rg_ree.sim.unique():
+    temp_df = salmon_rg_ree[salmon_rg_ree.sim==sim].iloc[-40000:,:]
+    blank_df = blank_df.append(temp_df)
+salmon_rg_ree = blank_df.copy()
+del blank_df
+del temp_df
+del salmon_rg, salmon_ree
+
+#need to remove frames and simulations that are not necessary
+#only show equilibrated part
+#this is for p1
+p1_rg = pd.read_csv("~/protamine_simulation/jupyter_nb/p1_rg.csv")
+p1_ree = pd.read_csv("~/protamine_simulation/jupyter_nb/p1_ree.csv")
+p1_rg_ree=pd.concat([p1_rg,p1_ree['Ree']],axis=1)
+p1_rg_ree=p1_rg_ree[p1_rg_ree.sim!=15]
+p1_rg_ree=p1_rg_ree[p1_rg_ree.sim!=13]
+blank_df = pd.DataFrame()
+for sim in p1_rg_ree.sim.unique():
+    temp_df = p1_rg_ree[p1_rg_ree.sim==sim].iloc[-40000:,:]
+    blank_df = blank_df.append(temp_df)
+p1_rg_ree = blank_df.copy()
+del blank_df
+del temp_df
+del p1_rg, p1_ree
+
+#need to remove frames and simulations that are not necessary
+#only show equilibrated part
+#this is for bull
+bull_rg = pd.read_csv("~/protamine_simulation/jupyter_nb/bull_Rg_master_out.csv")
+bull_ree = pd.read_csv("~/protamine_simulation/jupyter_nb/bull_Ree_master_out.csv")
+bull_rg_ree=pd.concat([bull_rg,bull_ree['Ree']],axis=1)
+bull_rg_ree=bull_rg_ree[bull_rg_ree.sim!=14]
+bull_rg_ree=bull_rg_ree[bull_rg_ree.sim!=15]
+blank_df = pd.DataFrame()
+for sim in bull_rg_ree.sim.unique():
+    temp_df = bull_rg_ree[bull_rg_ree.sim==sim].iloc[-40000:,:]
+    blank_df = blank_df.append(temp_df)
+bull_rg_ree = blank_df.copy()
+
+del blank_df
+del temp_df
+del bull_rg, bull_ree
+
+
+# In[3]:
+
+
+#human P1 protamine ESFF1 13 simulations
+#drop the same trajectories as ff14sb 13 simulations
+#use equilibrated region same region as ff14sb
+
+p1_rg_esff1= pd.read_csv('/home/hshadman/protamine_simulation/ESFF1/protamine_human/P1/explicit_solvent/more_nosalt_runs/explicit_continued_from_implicit/Rg_Ree/p1_Rg_master_out.csv')
+p1_ree_esff1= pd.read_csv('/home/hshadman/protamine_simulation/ESFF1/protamine_human/P1/explicit_solvent/more_nosalt_runs/explicit_continued_from_implicit/Rg_Ree/p1_Ree_master_out.csv')
+p1_rg_ree_esff1=pd.concat([p1_rg_esff1,p1_ree_esff1['Ree']],axis=1)
+p1_rg_ree_esff1=p1_rg_ree_esff1[p1_rg_ree_esff1.sim!=15]
+p1_rg_ree_esff1=p1_rg_ree_esff1[p1_rg_ree_esff1.sim!=13]
+blank_df = pd.DataFrame()
+for sim in p1_rg_ree_esff1.sim.unique():
+    temp_df = p1_rg_ree_esff1[p1_rg_ree_esff1.sim==sim].iloc[-40000:,:]
+    blank_df = blank_df.append(temp_df)
+p1_rg_ree_esff1 = blank_df.copy()
+del blank_df
+del temp_df
+del p1_rg_esff1, p1_ree_esff1
+
+
+# In[4]:
+
+
+#the long simulations 
+salmon_rg_oldff=pd.read_csv('~/protamine_simulation/jupyter_nb/salmon_Rg_eighth_oldff.csv')                                                                    
+salmon_ree_oldff=pd.read_csv('~/protamine_simulation/jupyter_nb/salmon_Ree_eighth_oldff.csv')                                                                  
+salmon_rg_ree_oldff=pd.concat([salmon_rg_oldff,salmon_ree_oldff['Ree']],axis=1)                                                  
+salmon_rg_ree_oldff['ratio']=salmon_rg_ree_oldff.Ree.values**2/salmon_rg_ree_oldff.Rg.values**2                                  
+
+p1_rg_oldff=pd.read_csv('~/protamine_simulation/jupyter_nb/p1_Rg_eighth_oldff.csv')                                                                    
+p1_ree_oldff=pd.read_csv('~/protamine_simulation/jupyter_nb/p1_Ree_eighth_oldff.csv')                                                                  
+p1_rg_ree_oldff=pd.concat([p1_rg_oldff,p1_ree_oldff['Ree']],axis=1)                                                  
+p1_rg_ree_oldff['ratio']=p1_rg_ree_oldff.Ree.values**2/p1_rg_ree_oldff.Rg.values**2                                  
+
+bull_rg_oldff=pd.read_csv('~/protamine_simulation/jupyter_nb/bull_Rg_fourth_oldff.csv')                                                                    
+bull_ree_oldff=pd.read_csv('~/protamine_simulation/jupyter_nb/bull_Ree_fourth_oldff.csv')                                                                  
+bull_rg_ree_oldff=pd.concat([bull_rg_oldff,bull_ree_oldff['Ree']],axis=1)     
+bull_rg_ree_oldff['ratio']=bull_rg_ree_oldff.Ree.values**2/bull_rg_ree_oldff.Rg.values**2                                  
+
+#use below two dataframes for plotting                                                                               
+
+del salmon_rg_oldff, salmon_ree_oldff,p1_rg_oldff, p1_ree_oldff, bull_rg_oldff, bull_ree_oldff
+  
+
+
+# In[5]:
+
+
+#protamine details (only for salmon dataframe i added Rg/Rg_mean)
+salmon_rg_ree_ratheatmap=salmon_rg_ree.copy()
+salmon_rg_ree_ratheatmap['ratio']=salmon_rg_ree_ratheatmap.Ree.values**2/salmon_rg_ree_ratheatmap.Rg.values**2
+del salmon_rg_ree
+
+test=salmon_rg_ree_ratheatmap.copy()
+temp_rg_mean=[]
+for sim in test.sim.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.sim==sim]['Rg'].mean(),
+                                 test[test.sim==sim]['Rg'].shape[0])))
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']    
+salmon_rg_ree_ratheatmap=test.copy()
+del test, temp_rg_mean
+
+
+# In[6]:
+
+
+#protamine details
+p1_rg_ree_ratheatmap=p1_rg_ree.copy()
+p1_rg_ree_ratheatmap['ratio']=p1_rg_ree_ratheatmap.Ree.values**2/p1_rg_ree_ratheatmap.Rg.values**2
+del p1_rg_ree
+p1_rg_ree_ratheatmap
+
+
+# In[7]:
+
+
+#protamine details
+p1_rg_ree_esff1_ratheatmap=p1_rg_ree_esff1.copy()
+p1_rg_ree_esff1_ratheatmap['ratio']=p1_rg_ree_esff1_ratheatmap.Ree.values**2/p1_rg_ree_esff1_ratheatmap.Rg.values**2
+del p1_rg_ree_esff1
+p1_rg_ree_esff1_ratheatmap
+
+
+# In[8]:
+
+
+#protamine details
+bull_rg_ree_ratheatmap=bull_rg_ree.copy()
+bull_rg_ree_ratheatmap['ratio']=bull_rg_ree_ratheatmap.Ree.values**2/bull_rg_ree_ratheatmap.Rg.values**2
+del bull_rg_ree
+bull_rg_ree_ratheatmap
+
+
+# In[9]:
+
+
+#salmon tensors received and converted to moments at below directory. only equilibrated region for moments for time
+salmon_moments=pd.read_csv('/home/hshadman/protamine_simulation/jupyter_nb/salmon_moments_equilibrated.csv')
+salmon_moments.insert(0,salmon_rg_ree_ratheatmap.columns[0],
+                      salmon_rg_ree_ratheatmap[salmon_rg_ree_ratheatmap.columns[0]].values)
+salmon_moments.insert(1,salmon_rg_ree_ratheatmap.columns[1],
+                      salmon_rg_ree_ratheatmap[salmon_rg_ree_ratheatmap.columns[1]].values)
+salmon_moments.insert(2,salmon_rg_ree_ratheatmap.columns[2],
+                      salmon_rg_ree_ratheatmap[salmon_rg_ree_ratheatmap.columns[2]].values)
+salmon_R1=salmon_moments.R1.values
+salmon_R2=salmon_moments.R2.values
+salmon_R3=salmon_moments.R3.values
+salmon_Rg=(salmon_R1+salmon_R2+salmon_R3)**0.5
+salmon_moments['asphericity']=(salmon_R1) - ((0.5) * ((salmon_R2) + (salmon_R3)))
+salmon_moments['acylindricity']=(salmon_R2) - (salmon_R3)
+salmon_moments['RSA'] = ((salmon_moments.asphericity.values**2) + (0.75*(salmon_moments.acylindricity.values**2)))/(salmon_Rg**4)
+del salmon_R1, salmon_R2, salmon_R3, salmon_Rg
+
+
+#p1 tensors received and converted to moments at below directory. only equilibrated region for moments for time
+p1_moments=pd.read_csv('/home/hshadman/protamine_simulation/jupyter_nb/p1_moments_equilibrated.csv')
+p1_moments.insert(0,p1_rg_ree_ratheatmap.columns[0],
+                      p1_rg_ree_ratheatmap[p1_rg_ree_ratheatmap.columns[0]].values)
+p1_moments.insert(1,p1_rg_ree_ratheatmap.columns[1],
+                      p1_rg_ree_ratheatmap[p1_rg_ree_ratheatmap.columns[1]].values)
+p1_moments.insert(2,p1_rg_ree_ratheatmap.columns[2],
+                      p1_rg_ree_ratheatmap[p1_rg_ree_ratheatmap.columns[2]].values)
+
+p1_R1=p1_moments.R1.values
+p1_R2=p1_moments.R2.values
+p1_R3=p1_moments.R3.values
+p1_Rg=(p1_R1+p1_R2+p1_R3)**0.5
+p1_moments['asphericity']=(p1_R1) - ((0.5) * ((p1_R2) + (p1_R3)))
+p1_moments['acylindricity']=(p1_R2) - (p1_R3)
+p1_moments['RSA'] = ((p1_moments.asphericity.values**2) + (0.75*(p1_moments.acylindricity.values**2)))/(p1_Rg**4)
+del p1_R1, p1_R2, p1_R3, p1_Rg
+
+
+#bull tensors received and converted to moments at below directory. only equilibrated region for moments for time
+bull_moments=pd.read_csv('/home/hshadman/protamine_simulation/jupyter_nb/bull_moments_equilibrated.csv')
+bull_moments.insert(0,bull_rg_ree_ratheatmap.columns[0],
+                      bull_rg_ree_ratheatmap[bull_rg_ree_ratheatmap.columns[0]].values)
+bull_moments.insert(1,bull_rg_ree_ratheatmap.columns[1],
+                      bull_rg_ree_ratheatmap[bull_rg_ree_ratheatmap.columns[1]].values)
+bull_moments.insert(2,bull_rg_ree_ratheatmap.columns[2],
+                      bull_rg_ree_ratheatmap[bull_rg_ree_ratheatmap.columns[2]].values)
+bull_R1=bull_moments.R1.values
+bull_R2=bull_moments.R2.values
+bull_R3=bull_moments.R3.values
+bull_Rg=(bull_R1+bull_R2+bull_R3)**0.5
+bull_moments['asphericity']=(bull_R1) - ((0.5) * ((bull_R2) + (bull_R3)))
+bull_moments['acylindricity']=(bull_R2) - (bull_R3)
+bull_moments['RSA'] = ((bull_moments.asphericity.values**2) + (0.75*(bull_moments.acylindricity.values**2)))/(bull_Rg**4)
+del bull_R1, bull_R2, bull_R3, bull_Rg
+
+
+# In[10]:
+
+
+salmon_moments
+
+
+# In[11]:
+
+
+bull_moments
+
+
+# In[12]:
+
+
+p1_moments
+
+
+# In[13]:
+
+
+bull_moments
+
+
+# In[14]:
+
+
+#BE CAREFUL with working directory for this first part of code
+#-------
+#only SAW_equil_chain_rg_ree was changed to SAW_SAW_equil_chain_rg_ree
+# BE CAREFUL when changing the RW to SAW and RW
+cwd= os.getcwd()
+os.chdir('/home/hshadman/polym_sep/SAW/varying_chain_lengths/')
+chain_lengths=[]
+for file in os.listdir():
+    if file.split('_')[0]=='chain':
+        chain_lengths.append(int(file.split('_')[2]))
+os.chdir(cwd)
+#--------
+folders=[]
+chain_lengths=sorted(chain_lengths)
+for i in chain_lengths:
+    folders.append('/home/hshadman/polym_sep/SAW/varying_chain_lengths/chain_length_'+str(i)+'/varying_epas_chain_length_'+str(i)+'_master_out.csv')
+j=0
+for file in folders:
+    test=pd.read_csv(file)
+    test['Rend2']=test.Rendx+test.Rendy+test.Rendz
+    test['Rg2']=test.Rgx+test.Rgy+test.Rgz
+    test['ratio']=test.Rend2.values/test.Rg2.values
+    test['asphericity']=test.Rgx.values-(0.5*(test.Rgy.values+test.Rgz.values))
+    test['acylindricity']=test.Rgy.values-test.Rgz.values
+    test['RSA']=((test.asphericity.values**2+(0.75*test.acylindricity.values**2))/(test.Rg2.values)**2)**0.5
+
+    epas_considered = test.epas.unique()
+    blank_df = pd.DataFrame()
+    for epas in test.epas.unique():
+        if epas in epas_considered:
+            frames_number=len(test[test.epas==epas].index)
+            equil_frames=int(0.90*frames_number)
+            temp_df = test[test.epas==epas].iloc[-equil_frames:,:]
+            blank_df = blank_df.append(temp_df)
+    equil_test=blank_df.copy()
+    equil_test=equil_test.drop(['frames','econf'],axis=1)
+    if j==0:
+        SAW_equil_chain_rg_ree=equil_test.copy()
+        for epas_val in equil_test.epas.unique():
+            if epas_val==equil_test.epas.unique()[0]:
+                running_df=pd.DataFrame(data=equil_test[equil_test.epas==epas_val].mean(axis=0)).T
+            elif epas_val!=equil_test.epas.unique()[0]:
+                running_df=running_df.append(pd.DataFrame(data=equil_test[equil_test.epas==epas_val].mean(axis=0)).T)            
+        summary_df_SAW=running_df.copy()
+    else:
+        SAW_equil_chain_rg_ree=SAW_equil_chain_rg_ree.append(equil_test)
+        for epas_val in equil_test.epas.unique():
+            if epas_val==equil_test.epas.unique()[0]:
+                running_df=pd.DataFrame(data=equil_test[equil_test.epas==epas_val].mean(axis=0)).T
+            elif epas_val!=equil_test.epas.unique()[0]:
+                running_df=running_df.append(pd.DataFrame(data=equil_test[equil_test.epas==epas_val].mean(axis=0)).T)            
+        summary_df_SAW=pd.concat([summary_df_SAW,running_df],axis=0)    
+    del blank_df, temp_df, test, equil_test    
+    j+=1
+del running_df, equil_frames
+summary_df_SAW=summary_df_SAW.round({'epas':2})
+SAW_equil_chain_rg_ree=SAW_equil_chain_rg_ree.round({'epas':2})
+
+
+# In[15]:
+
+
+#BE CAREFUL with working directory for this first part of code
+#-------
+#only RW_equil_chain_rg_ree was changed to RW_RW_equil_chain_rg_ree
+# BE CAREFUL when changing the RW to SAW and RW
+cwd= os.getcwd()
+os.chdir('/home/hshadman/polym_sep/random_walk/varying_chain_lengths/')
+chain_lengths=[]
+for file in os.listdir():
+    if file.split('_')[0]=='chain':
+        chain_lengths.append(int(file.split('_')[2]))
+os.chdir(cwd)
+#--------
+folders=[]
+chain_lengths=sorted(chain_lengths)
+for i in chain_lengths:
+    folders.append('/home/hshadman/polym_sep/random_walk/varying_chain_lengths/chain_length_'+str(i)+'/varying_epas_chain_length_'+str(i)+'_master_out.csv')
+j=0
+for file in folders:
+    test=pd.read_csv(file)
+    test['Rend2']=test.Rendx+test.Rendy+test.Rendz
+    test['Rg2']=test.Rgx+test.Rgy+test.Rgz
+    test['ratio']=test.Rend2.values/test.Rg2.values
+    test['asphericity']=test.Rgx.values-(0.5*(test.Rgy.values+test.Rgz.values))
+    test['acylindricity']=test.Rgy.values-test.Rgz.values
+    test['RSA']=((test.asphericity.values**2+(0.75*test.acylindricity.values**2))/(test.Rg2.values)**2)**0.5
+
+    epas_considered = test.epas.unique()
+    blank_df = pd.DataFrame()
+    for epas in test.epas.unique():
+        if epas in epas_considered:
+            frames_number=len(test[test.epas==epas].index)
+            equil_frames=int(0.90*frames_number)
+            temp_df = test[test.epas==epas].iloc[-equil_frames:,:]
+            blank_df = blank_df.append(temp_df)
+    equil_test=blank_df.copy()
+    equil_test=equil_test.drop(['frames','econf'],axis=1)
+    if j==0:
+        RW_equil_chain_rg_ree=equil_test.copy()
+        for epas_val in equil_test.epas.unique():
+            if epas_val==equil_test.epas.unique()[0]:
+                running_df=pd.DataFrame(data=equil_test[equil_test.epas==epas_val].mean(axis=0)).T
+            elif epas_val!=equil_test.epas.unique()[0]:
+                running_df=running_df.append(pd.DataFrame(data=equil_test[equil_test.epas==epas_val].mean(axis=0)).T)            
+        summary_df_RW=running_df.copy()
+    else:
+        RW_equil_chain_rg_ree=RW_equil_chain_rg_ree.append(equil_test)
+        for epas_val in equil_test.epas.unique():
+            if epas_val==equil_test.epas.unique()[0]:
+                running_df=pd.DataFrame(data=equil_test[equil_test.epas==epas_val].mean(axis=0)).T
+            elif epas_val!=equil_test.epas.unique()[0]:
+                running_df=running_df.append(pd.DataFrame(data=equil_test[equil_test.epas==epas_val].mean(axis=0)).T)            
+        summary_df_RW=pd.concat([summary_df_RW,running_df],axis=0)    
+    del blank_df, temp_df, test, equil_test    
+    j+=1
+del running_df, equil_frames
+summary_df_RW=summary_df_RW.round({'epas':2})
+RW_equil_chain_rg_ree=RW_equil_chain_rg_ree.round({'epas':2})
+
+
+# In[16]:
+
+
+#PEI code
+pei_ratheatmap=pd.read_csv("/home/hshadman/caleb_cyu1/jupyter_nb/pei_Rg_Ree_master_out.csv")
+pei_ratheatmap['ratio']=pei_ratheatmap.Ree.values**2/pei_ratheatmap.Rg.values**2
+
+test=pei_ratheatmap.copy()
+
+temp_rg_mean=[]
+for sim in test.proton.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.proton==sim]['Rg'].mean(),
+                                 test[test.proton==sim]['Rg'].shape[0])))
+    
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+pei_ratheatmap=test.copy()
+del test, temp_rg_mean
+
+
+# In[17]:
+
+
+pei_ratheatmap
+
+
+# # formula from 2012 macromolecules elder jayaraman paper
+# $$
+# asphericity=(R_1)-\frac{1}{2}(R_2+R_3) \\  
+# acylindricity=(R_2-R_3) \\
+# RSA=\frac{asphericity^2 + 0.75acylindricity^2}{R_g^4}
+# $$
+
+# In[18]:
+
+
+#double check RSA definitions!!! (have been double checked)
+pei_moments=pd.read_csv("/home/hshadman/caleb_cyu1/jupyter_nb/pei_moments.csv")
+pei_tensor=pd.read_csv("/home/hshadman/caleb_cyu1/pei_tensor/pei_tensor_master_out.csv")
+pei_moments.insert(0,pei_tensor.columns[0],pei_tensor[pei_tensor.columns[0]])
+pei_moments.insert(1,pei_tensor.columns[1],pei_tensor[pei_tensor.columns[1]])
+pei_moments.insert(2,pei_tensor.columns[2],pei_tensor[pei_tensor.columns[2]])
+pei_R1=pei_moments.R1.values
+pei_R2=pei_moments.R2.values
+pei_R3=pei_moments.R3.values
+pei_Rg=pei_moments.Rg.values
+pei_moments['asphericity']=(pei_R1) - ((0.5) * ((pei_R2) + (pei_R3)))
+pei_moments['acylindricity']=(pei_R2) - (pei_R3)
+pei_moments['RSA'] = ((pei_moments.asphericity.values**2) + (0.75*(pei_moments.acylindricity.values**2)))/(pei_Rg**4)
+del pei_tensor, pei_R1, pei_R2, pei_R3, pei_Rg
+pei_moments
+
+
+# In[19]:
+
+
+(pei_moments.R1+pei_moments.R2+pei_moments.R3)**0.5
+
+
+# In[20]:
+
+
+GW_ind_runs_chainlen25 = pd.read_csv('/home/hshadman/polym_sep/gaussian_chain/code/gaussian_single_chain_length_25_6_runs.csv')
+GW_ind_runs_chainlen100 = pd.read_csv('/home/hshadman/polym_sep/gaussian_chain/code/gaussian_single_chain_length_100_6_runs.csv')
+GW_ind_runs_chainlen100_2 = pd.read_csv('/home/hshadman/polym_sep/gaussian_chain/code/2nd_time_gaussian_single_chain_length_100_9_runs.csv')
+GW_ind_runs_chainlen100_3 = pd.read_csv('/home/hshadman/polym_sep/gaussian_chain/code/3rd_time_gaussian_single_chain_length_100_6_runs.csv')
+GW_ind_runs_chainlen150 = pd.read_csv('/home/hshadman/polym_sep/gaussian_chain/code/gaussian_single_chain_length_150_6_runs.csv')
+
+#add rg/rg_mean column for each dataframe saved
+
+#first the GW_ind_runs_chainlen25 (2 instances of dataframe in each chunk)
+test=GW_ind_runs_chainlen25.copy()
+test['Rg']=test.Rg2.values**0.5
+temp_rg_mean=[]
+for run_num in test.run_number.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.run_number==run_num]['Rg'].mean(),
+                                 test[test.run_number==run_num]['Rg'].shape[0])))
+
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+GW_ind_runs_chainlen25=test.copy()
+del test, temp_rg_mean
+
+#second the GW_ind_runs_chainlen100 (2 instances of dataframe in each chunk)
+test=GW_ind_runs_chainlen100.copy()
+test['Rg']=test.Rg2.values**0.5
+temp_rg_mean=[]
+for run_num in test.run_number.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.run_number==run_num]['Rg'].mean(),
+                                 test[test.run_number==run_num]['Rg'].shape[0])))
+
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+GW_ind_runs_chainlen100=test.copy()
+del test, temp_rg_mean
+
+#second second the GW_ind_runs_chainlen100 (2 instances of dataframe in each chunk)
+test=GW_ind_runs_chainlen100_2.copy()
+test['Rg']=test.Rg2.values**0.5
+temp_rg_mean=[]
+for run_num in test.run_number.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.run_number==run_num]['Rg'].mean(),
+                                 test[test.run_number==run_num]['Rg'].shape[0])))
+
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+GW_ind_runs_chainlen100_2=test.copy()
+
+#second second second the GW_ind_runs_chainlen100 (2 instances of dataframe in each chunk)
+test=GW_ind_runs_chainlen100_3.copy()
+test['Rg']=test.Rg2.values**0.5
+temp_rg_mean=[]
+for run_num in test.run_number.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.run_number==run_num]['Rg'].mean(),
+                                 test[test.run_number==run_num]['Rg'].shape[0])))
+
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+GW_ind_runs_chainlen100_3=test.copy()
+
+
+
+#update run number in second  and 3rd dataframes of chain length 100
+GW_ind_runs_chainlen100_2['run_number']= GW_ind_runs_chainlen100_2['run_number'] + GW_ind_runs_chainlen100['run_number'].max()
+GW_ind_runs_chainlen100_3['run_number']= GW_ind_runs_chainlen100_3['run_number'] + GW_ind_runs_chainlen100_2['run_number'].max()
+#combine the three dataframes
+GW_ind_runs_chainlen100 = pd.concat([GW_ind_runs_chainlen100,
+                                     GW_ind_runs_chainlen100_2,
+                                    GW_ind_runs_chainlen100_3],axis=0)
+del test, temp_rg_mean,GW_ind_runs_chainlen100_2,GW_ind_runs_chainlen100_3
+
+
+
+#third the GW_ind_runs_chainlen150 (2 instances of dataframe in each chunk)
+test=GW_ind_runs_chainlen150.copy()
+test['Rg']=test.Rg2.values**0.5
+temp_rg_mean=[]
+for run_num in test.run_number.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.run_number==run_num]['Rg'].mean(),
+                                 test[test.run_number==run_num]['Rg'].shape[0])))
+
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+GW_ind_runs_chainlen150=test.copy()
+del test, temp_rg_mean
+
+
+# In[21]:
+
+
+GW_equil_chain_rg_ree = pd.read_csv('/home/hshadman/polym_sep/gaussian_chain/code/gaussian_chain_master_out.csv')[['chain_length','Rg2','Rend2','ratio']]
+GW_moments = pd.read_csv('/home/hshadman/polym_sep/gaussian_chain/code/gaussian_chain_master_out.csv')[['chain_length','Rg2','R1','R2','R3','asphericity','acylindricity','RSA']]
+#GW_moments already has asphericity, acylindricity and RSA from csv file but we are replacing that and recalcualting
+
+GW_R1=GW_moments.R1.values
+GW_R2=GW_moments.R2.values
+GW_R3=GW_moments.R3.values
+GW_Rg=GW_moments.Rg2.values**0.5
+GW_moments['asphericity']=(GW_R1) - ((0.5) * ((GW_R2) + (GW_R3)))
+GW_moments['acylindricity']=(GW_R2) - (GW_R3)
+GW_moments['RSA'] = ((GW_moments.asphericity.values**2) + (0.75*(GW_moments.acylindricity.values**2)))/(GW_Rg**4)
+del GW_R1, GW_R2, GW_R3, GW_Rg
+
+
+# In[22]:
+
+
+GW_moments
+
+
+# In[23]:
+
+
+#adding a column of Rg/Rg_mean for GW ONLY
+#careful about changing anything here
+#only GW don't do this for RW and SAW having epas and chainlength complicates things
+test=GW_equil_chain_rg_ree.copy()
+test['Rg']=test.Rg2.values**0.5
+temp_rg_mean=[]
+for chain_length in test.chain_length.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.chain_length==chain_length]['Rg'].mean(),
+                                 test[test.chain_length==chain_length]['Rg'].shape[0])))
+    
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+GW_equil_chain_rg_ree=test.copy()
+del test, temp_rg_mean
+
+
+# In[24]:
+
+
+#ab40_ff14SB (disordered)
+#CAREFUL if using frame numbers -- they repeat
+ab40_ff14sb_rg_noimage = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/ab40-ff14SB/analysis/Rg_ree_data/ab40_ff14SB_Rg_noimage_master_out.csv")
+ab40_ff14sb_ree_noimage = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/ab40-ff14SB/analysis/Rg_ree_data/ab40_ff14SB_Ree_noimage_master_out.csv")
+ab40_ff14sb_rg_ree_ratheatmap_noimage = pd.concat([ab40_ff14sb_rg_noimage.frames,
+                                           ab40_ff14sb_rg_noimage.sim,
+                                          ab40_ff14sb_rg_noimage.Rg,
+                                          ab40_ff14sb_ree_noimage.Ree],axis=1)
+ab40_ff14sb_rg_ree_ratheatmap_noimage['ratio']=ab40_ff14sb_rg_ree_ratheatmap_noimage.Ree**2/ab40_ff14sb_rg_ree_ratheatmap_noimage.Rg**2
+
+test=ab40_ff14sb_rg_ree_ratheatmap_noimage.copy()
+
+temp_rg_mean=[]
+for sim in test.sim.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.sim==sim]['Rg'].mean(),
+                                 test[test.sim==sim]['Rg'].shape[0])))
+    
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+ab40_ff14sb_rg_ree_ratheatmap_noimage=test.copy()
+del test, temp_rg_mean
+
+del ab40_ff14sb_rg_noimage, ab40_ff14sb_ree_noimage
+
+
+# In[25]:
+
+
+ab40_ff14sb_rg_ree_ratheatmap_noimage
+
+
+# In[26]:
+
+
+ab40_ff14sb_moments=pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/jupyter_nb/ab40_ff14sb_rg_noimage_moments.csv")
+
+ab40_ff14sb_R1=ab40_ff14sb_moments.R1.values
+ab40_ff14sb_R2=ab40_ff14sb_moments.R2.values
+ab40_ff14sb_R3=ab40_ff14sb_moments.R3.values
+ab40_ff14sb_Rg=(ab40_ff14sb_R1+ab40_ff14sb_R2+ab40_ff14sb_R3)**0.5
+ab40_ff14sb_moments['asphericity']=(ab40_ff14sb_R1) - ((0.5) * ((ab40_ff14sb_R2) + (ab40_ff14sb_R3)))
+ab40_ff14sb_moments['acylindricity']=(ab40_ff14sb_R2) - (ab40_ff14sb_R3)
+ab40_ff14sb_moments['RSA'] = ((ab40_ff14sb_moments.asphericity.values**2) + (0.75*(ab40_ff14sb_moments.acylindricity.values**2)))/(ab40_ff14sb_Rg**4)
+del ab40_ff14sb_R1, ab40_ff14sb_R2, ab40_ff14sb_R3, ab40_ff14sb_Rg
+ab40_ff14sb_moments
+
+
+# In[27]:
+
+
+#ab40_ff14SB (disordered)
+#CAREFUO if using frame numbers -- they repeat
+ab40_ff14sb_rg = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/ab40-ff14SB/analysis/Rg_ree_data/ab40_ff14SB_Rg_master_out.csv")
+ab40_ff14sb_ree = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/ab40-ff14SB/analysis/Rg_ree_data/ab40_ff14SB_Ree_master_out.csv")
+ab40_ff14sb_rg_ree_ratheatmap = pd.concat([ab40_ff14sb_rg.frames,
+                                           ab40_ff14sb_rg.sim,
+                                          ab40_ff14sb_rg.Rg,
+                                          ab40_ff14sb_ree.Ree],axis=1)
+ab40_ff14sb_rg_ree_ratheatmap['ratio']=ab40_ff14sb_rg_ree_ratheatmap.Ree**2/ab40_ff14sb_rg_ree_ratheatmap.Rg**2
+
+test=ab40_ff14sb_rg_ree_ratheatmap.copy()
+
+temp_rg_mean=[]
+for sim in test.sim.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.sim==sim]['Rg'].mean(),
+                                 test[test.sim==sim]['Rg'].shape[0])))
+    
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+ab40_ff14sb_rg_ree_ratheatmap=test.copy()
+del test, temp_rg_mean
+
+del ab40_ff14sb_rg, ab40_ff14sb_ree
+
+
+# In[28]:
+
+
+ab40_ff14sb_rg_ree_ratheatmap
+
+
+# In[29]:
+
+
+#tauF4_esff1 (disordered)
+#CAREFUO if using frame numbers -- they repeat
+tauF4_esff1_rg = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/tauF4-ESFF1/analysis/Rg_ree_data/tauF4_ESFF1_Rg_master_out.csv")
+tauF4_esff1_ree = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/tauF4-ESFF1/analysis/Rg_ree_data/tauF4_ESFF1_Ree_master_out.csv")
+tauF4_esff1_rg_ree_ratheatmap = pd.concat([tauF4_esff1_rg.frames,
+                                           tauF4_esff1_rg.sim,
+                                          tauF4_esff1_rg.Rg,
+                                          tauF4_esff1_ree.Ree],axis=1)
+tauF4_esff1_rg_ree_ratheatmap['ratio']=tauF4_esff1_rg_ree_ratheatmap.Ree**2/tauF4_esff1_rg_ree_ratheatmap.Rg**2
+
+test=tauF4_esff1_rg_ree_ratheatmap.copy()
+
+temp_rg_mean=[]
+for sim in test.sim.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.sim==sim]['Rg'].mean(),
+                                 test[test.sim==sim]['Rg'].shape[0])))
+    
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+tauF4_esff1_rg_ree_ratheatmap=test.copy()
+del test, temp_rg_mean
+
+del tauF4_esff1_rg, tauF4_esff1_ree
+
+
+# In[30]:
+
+
+tauF4_esff1_rg_ree_ratheatmap
+
+
+# In[31]:
+
+
+tauF4_esff1_moments=pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/jupyter_nb/tauF4_esff1_rg_moments.csv")
+
+tauF4_esff1_R1=tauF4_esff1_moments.R1.values
+tauF4_esff1_R2=tauF4_esff1_moments.R2.values
+tauF4_esff1_R3=tauF4_esff1_moments.R3.values
+tauF4_esff1_Rg=(tauF4_esff1_R1+tauF4_esff1_R2+tauF4_esff1_R3)**0.5
+tauF4_esff1_moments['asphericity']=(tauF4_esff1_R1) - ((0.5) * ((tauF4_esff1_R2) + (tauF4_esff1_R3)))
+tauF4_esff1_moments['acylindricity']=(tauF4_esff1_R2) - (tauF4_esff1_R3)
+tauF4_esff1_moments['RSA'] = ((tauF4_esff1_moments.asphericity.values**2) + (0.75*(tauF4_esff1_moments.acylindricity.values**2)))/(tauF4_esff1_Rg**4)
+del tauF4_esff1_R1, tauF4_esff1_R2, tauF4_esff1_R3, tauF4_esff1_Rg
+tauF4_esff1_moments
+
+
+# In[32]:
+
+
+#FKBP12_ESFF1 (ordered)
+
+FKBP12_ESFF1_rg = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/FKBP12/FKBP12/ESFFx/analysis/Rg_ree_data/FKBP12_ESFF1_Rg_master_out.csv")
+FKBP12_ESFF1_ree = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/FKBP12/FKBP12/ESFFx/analysis/Rg_ree_data/FKBP12_ESFF1_Ree_master_out.csv")
+FKBP12_ESFF1_rg_ree_ratheatmap = pd.concat([FKBP12_ESFF1_rg.frames,
+                                           FKBP12_ESFF1_rg.sim,
+                                          FKBP12_ESFF1_rg.Rg,
+                                          FKBP12_ESFF1_ree.Ree],axis=1)
+FKBP12_ESFF1_rg_ree_ratheatmap['ratio']=FKBP12_ESFF1_rg_ree_ratheatmap.Ree**2/FKBP12_ESFF1_rg_ree_ratheatmap.Rg**2
+test=FKBP12_ESFF1_rg_ree_ratheatmap.copy()
+
+temp_rg_mean=[]
+for sim in test.sim.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.sim==sim]['Rg'].mean(),
+                                 test[test.sim==sim]['Rg'].shape[0])))
+    
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+FKBP12_ESFF1_rg_ree_ratheatmap=test.copy()
+del test, temp_rg_mean
+
+del FKBP12_ESFF1_rg, FKBP12_ESFF1_ree
+
+
+# In[33]:
+
+
+FKBP12_ESFF1_rg_ree_ratheatmap
+
+
+# In[34]:
+
+
+FKBP12_ESFF1_moments=pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/jupyter_nb/FKBP12_ESFF1_rg_moments.csv")
+
+FKBP12_ESFF1_R1=FKBP12_ESFF1_moments.R1.values
+FKBP12_ESFF1_R2=FKBP12_ESFF1_moments.R2.values
+FKBP12_ESFF1_R3=FKBP12_ESFF1_moments.R3.values
+FKBP12_ESFF1_Rg=(FKBP12_ESFF1_R1+FKBP12_ESFF1_R2+FKBP12_ESFF1_R3)**0.5
+FKBP12_ESFF1_moments['asphericity']=(FKBP12_ESFF1_R1) - ((0.5) * ((FKBP12_ESFF1_R2) + (FKBP12_ESFF1_R3)))
+FKBP12_ESFF1_moments['acylindricity']=(FKBP12_ESFF1_R2) - (FKBP12_ESFF1_R3)
+FKBP12_ESFF1_moments['RSA'] = ((FKBP12_ESFF1_moments.asphericity.values**2) + (0.75*(FKBP12_ESFF1_moments.acylindricity.values**2)))/(FKBP12_ESFF1_Rg**4)
+del FKBP12_ESFF1_R1, FKBP12_ESFF1_R2, FKBP12_ESFF1_R3, FKBP12_ESFF1_Rg
+FKBP12_ESFF1_moments
+
+
+# In[35]:
+
+
+#ubiquitin_ESFF1 (ordered)
+
+ubiquitin_ESFF1_rg = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/ubiquitin-ESFF1/combined_traj1/Rg_ree_data/ubiquitin_ESFF1_Rg_master_out.csv")
+ubiquitin_ESFF1_ree = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/ubiquitin-ESFF1/combined_traj1/Rg_ree_data/ubiquitin_ESFF1_Ree_master_out.csv")
+ubiquitin_ESFF1_rg_ree_ratheatmap = pd.concat([ubiquitin_ESFF1_rg.frames,
+                                           ubiquitin_ESFF1_rg.sim,
+                                          ubiquitin_ESFF1_rg.Rg,
+                                          ubiquitin_ESFF1_ree.Ree],axis=1)
+ubiquitin_ESFF1_rg_ree_ratheatmap['ratio']=ubiquitin_ESFF1_rg_ree_ratheatmap.Ree**2/ubiquitin_ESFF1_rg_ree_ratheatmap.Rg**2
+
+test=ubiquitin_ESFF1_rg_ree_ratheatmap.copy()
+
+temp_rg_mean=[]
+for sim in test.sim.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.sim==sim]['Rg'].mean(),
+                                 test[test.sim==sim]['Rg'].shape[0])))
+    
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+ubiquitin_ESFF1_rg_ree_ratheatmap=test.copy()
+del test, temp_rg_mean
+
+del ubiquitin_ESFF1_rg, ubiquitin_ESFF1_ree
+
+
+# In[36]:
+
+
+ubiquitin_ESFF1_rg_ree_ratheatmap
+
+
+# In[37]:
+
+
+ubiquitin_ESFF1_moments= pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/jupyter_nb/ubiquitin_ESFF1_rg_moments.csv")
+
+ubiquitin_ESFF1_R1=ubiquitin_ESFF1_moments.R1.values
+ubiquitin_ESFF1_R2=ubiquitin_ESFF1_moments.R2.values
+ubiquitin_ESFF1_R3=ubiquitin_ESFF1_moments.R3.values
+ubiquitin_ESFF1_Rg=(ubiquitin_ESFF1_R1+ubiquitin_ESFF1_R2+ubiquitin_ESFF1_R3)**0.5
+ubiquitin_ESFF1_moments['asphericity']=(ubiquitin_ESFF1_R1) - ((0.5) * ((ubiquitin_ESFF1_R2) + (ubiquitin_ESFF1_R3)))
+ubiquitin_ESFF1_moments['acylindricity']=(ubiquitin_ESFF1_R2) - (ubiquitin_ESFF1_R3)
+ubiquitin_ESFF1_moments['RSA'] = ((ubiquitin_ESFF1_moments.asphericity.values**2) + (0.75*(ubiquitin_ESFF1_moments.acylindricity.values**2)))/(ubiquitin_ESFF1_Rg**4)
+del ubiquitin_ESFF1_R1, ubiquitin_ESFF1_R2, ubiquitin_ESFF1_R3, ubiquitin_ESFF1_Rg
+ubiquitin_ESFF1_moments
+
+
+# In[38]:
+
+
+#lush_ESFF1 (ordered)
+lush_ESFF1_rg = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/traj_LUSH/combined_traj1/Rg_ree_data/LUSH_ESFF1_Rg_master_out.csv")
+lush_ESFF1_ree = pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/traj_LUSH/combined_traj1/Rg_ree_data/LUSH_ESFF1_Ree_master_out.csv")
+lush_ESFF1_rg_ree_ratheatmap = pd.concat([lush_ESFF1_rg.frames,
+                                           lush_ESFF1_rg.sim,
+                                          lush_ESFF1_rg.Rg,
+                                          lush_ESFF1_ree.Ree],axis=1)
+lush_ESFF1_rg_ree_ratheatmap['ratio']=lush_ESFF1_rg_ree_ratheatmap.Ree**2/lush_ESFF1_rg_ree_ratheatmap.Rg**2
+
+test=lush_ESFF1_rg_ree_ratheatmap.copy()
+
+temp_rg_mean=[]
+for sim in test.sim.unique():
+    temp_rg_mean.append(list(np.repeat(test[test.sim==sim]['Rg'].mean(),
+                                 test[test.sim==sim]['Rg'].shape[0])))
+    
+test['Rg_mean']=list(chain.from_iterable(temp_rg_mean))
+test['Rg/Rg_mean']=test['Rg'].values/test['Rg_mean']
+
+lush_ESFF1_rg_ree_ratheatmap=test.copy()
+del test, temp_rg_mean
+
+del lush_ESFF1_rg, lush_ESFF1_ree
+
+
+# In[39]:
+
+
+lush_ESFF1_rg_ree_ratheatmap
+
+
+# In[40]:
+
+
+lush_ESFF1_moments=pd.read_csv("/home/hshadman/trajectories_folder_Li_zhengxin/jupyter_nb/lush_ESFF1_rg_moments.csv")
+
+lush_ESFF1_R1=lush_ESFF1_moments.R1.values
+lush_ESFF1_R2=lush_ESFF1_moments.R2.values
+lush_ESFF1_R3=lush_ESFF1_moments.R3.values
+lush_ESFF1_Rg=(lush_ESFF1_R1+lush_ESFF1_R2+lush_ESFF1_R3)**0.5
+lush_ESFF1_moments['asphericity']=(lush_ESFF1_R1) - ((0.5) * ((lush_ESFF1_R2) + (lush_ESFF1_R3)))
+lush_ESFF1_moments['acylindricity']=(lush_ESFF1_R2) - (lush_ESFF1_R3)
+lush_ESFF1_moments['RSA'] = ((lush_ESFF1_moments.asphericity.values**2) + (0.75*(lush_ESFF1_moments.acylindricity.values**2)))/(lush_ESFF1_Rg**4)
+del lush_ESFF1_R1, lush_ESFF1_R2, lush_ESFF1_R3, lush_ESFF1_Rg
+lush_ESFF1_moments
+
+
+# # initialization complete
+
+# # checking if # of snapshots affects GW 9x% area
+
+# In[42]:
+
+
+
+
+from scipy.stats import gaussian_kde
+import matplotlib.pyplot as plt
+import numpy as np
+
+def area(vs):
+    a = 0
+    x0,y0 = vs[0]
+    for [x1,y1] in vs[1:]:
+        dx = x1-x0
+        dy = y1-y0
+        a += 0.5*(y0*dx - x0*dy)
+        x0 = x1
+        y0 = y1
+    return a
+
+area_GW=[]
+
+for upto_ind_run in range(1,22):
+    RadVel = GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run]['ratio'].values
+    RelDist = GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run]['Rg/Rg_mean'].values
+    x = RelDist
+    y = RadVel
+
+    k = gaussian_kde(np.vstack([RelDist, RadVel]))
+    xi, yi = np.mgrid[x.min():x.max():x.size**0.5*1j,y.min():y.max():y.size**0.5*1j]
+    zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+
+    #set zi to 0-1 scale
+    zi = (zi-zi.min())/(zi.max() - zi.min())
+    zi =zi.reshape(xi.shape)
+
+    #set up plot
+    origin = 'lower'
+    levels = [0.05]
+    SCA= plt.scatter(RelDist,RadVel)
+    cs = plt.contour(xi, yi, zi,levels = levels,
+                  colors=('k',),
+                  linewidths=(1,),
+                  origin=origin)
+
+
+
+    # Get one of the contours from the plot.
+    for i in range(len(levels)):
+        contour = cs.collections[i]
+        vs = contour.get_paths()[0].vertices
+        # Compute area enclosed by vertices.
+        a = area(vs)
+        area_GW.append(a)
+        print( "r = " + str(levels[i]) + ": a =" + str(a))
+
+
+    plt.clabel(cs, fmt='%.3f', colors='b', fontsize=8,inline=False)
+    plt.gca()
+    plt.xlim(0,3)
+    #plt.xscale('log')
+    plt.ylim(-1,30)
+
+
+# In[45]:
+
+
+fig,ax=plt.subplots(figsize=(10,8))
+GW_snaps=[GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run].shape[0] for upto_ind_run in range(1,22)]
+ax.scatter(GW_snaps,
+           area_GW,
+           color='darkorange',label='GW area, 95% contour' ,
+           marker='s',s=80)
+ax.plot(GW_snaps,
+        area_GW,
+        color='darkorange')
+
+
+
+plt.setp(ax.get_xticklabels(),fontsize=19,rotation=45)
+plt.setp(ax.get_yticklabels(),fontsize=19)
+ax.set_xlabel('number of snapshots (cumulative of independent runs)',fontsize=22)
+ax.set_ylabel('#',fontsize=22)
+color_list = iter(cm.viridis(np.linspace(0, 1, GW_equil_chain_rg_ree.chain_length.unique().shape[0])))
+#ax.axvline(x=0.02,ymin=0,ymax=1,linewidth=1.5,color=next(color_list),label='step size used for manuscript')
+#ax.text(0.2,0.5,'both protein & GW have 180000 snapshots',
+#                  transform=ax.transAxes,fontsize=18,color='black')
+
+#ax.set_ylim(-0.05,1)
+for i in ['top', 'left', 'right', 'bottom']:
+    ax.spines[i].set_linewidth(1.6)
+    
+ax.minorticks_on()
+ax.tick_params(axis='y', which='major', labelsize=19, width = 1.7, size = 8,pad=10)
+ax.tick_params(axis='y', which='minor', width = 1.2, size = 5)        
+ax.tick_params(axis='x', which='minor',bottom=False)        
+ax.legend(fontsize=13,bbox_to_anchor=(1.01,0.5))
+#ax.set_xscale('log')
+#ax.set_yscale('log')
+
+#plt.savefig('figures/fa_against_proton_states_pei.png', dpi = 1000, bbox_inches='tight')    
+
+
+# In[46]:
+
+
+
+
+from scipy.stats import gaussian_kde
+import matplotlib.pyplot as plt
+import numpy as np
+
+def area(vs):
+    a = 0
+    x0,y0 = vs[0]
+    for [x1,y1] in vs[1:]:
+        dx = x1-x0
+        dy = y1-y0
+        a += 0.5*(y0*dx - x0*dy)
+        x0 = x1
+        y0 = y1
+    return a
+
+area_GW=[]
+
+for upto_ind_run in range(1,22):
+    RadVel = GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run]['ratio'].values
+    RelDist = GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run]['Rg/Rg_mean'].values
+    x = RelDist
+    y = RadVel
+
+    k = gaussian_kde(np.vstack([RelDist, RadVel]))
+    xi, yi = np.mgrid[x.min():x.max():x.size**0.5*1j,y.min():y.max():y.size**0.5*1j]
+    zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+
+    #set zi to 0-1 scale
+    zi = (zi-zi.min())/(zi.max() - zi.min())
+    zi =zi.reshape(xi.shape)
+
+    #set up plot
+    origin = 'lower'
+    levels = [0.1]
+    SCA= plt.scatter(RelDist,RadVel)
+    cs = plt.contour(xi, yi, zi,levels = levels,
+                  colors=('k',),
+                  linewidths=(1,),
+                  origin=origin)
+
+
+
+    # Get one of the contours from the plot.
+    for i in range(len(levels)):
+        contour = cs.collections[i]
+        vs = contour.get_paths()[0].vertices
+        # Compute area enclosed by vertices.
+        a = area(vs)
+        area_GW.append(a)
+        print(f'{GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run].shape[0]} snapshots' +"r = " + str(levels[i]) + ": a =" + str(a))
+
+
+    plt.clabel(cs, fmt='%.3f', colors='b', fontsize=8,inline=False)
+    plt.gca()
+    plt.xlim(0,3)
+    #plt.xscale('log')
+    plt.ylim(-1,30)
+
+
+# In[47]:
+
+
+fig,ax=plt.subplots(figsize=(10,8))
+GW_snaps=[GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run].shape[0] for upto_ind_run in range(1,22)]
+ax.scatter(GW_snaps,
+           area_GW,
+           color='darkorange',label='GW area, 90% contour' ,
+           marker='s',s=80)
+ax.plot(GW_snaps,
+        area_GW,
+        color='darkorange')
+
+
+
+plt.setp(ax.get_xticklabels(),fontsize=19,rotation=45)
+plt.setp(ax.get_yticklabels(),fontsize=19)
+ax.set_xlabel('number of snapshots (cumulative of independent runs)',fontsize=22)
+ax.set_ylabel('#',fontsize=22)
+color_list = iter(cm.viridis(np.linspace(0, 1, GW_equil_chain_rg_ree.chain_length.unique().shape[0])))
+#ax.axvline(x=0.02,ymin=0,ymax=1,linewidth=1.5,color=next(color_list),label='step size used for manuscript')
+#ax.text(0.2,0.5,'both protein & GW have 180000 snapshots',
+#                  transform=ax.transAxes,fontsize=18,color='black')
+
+#ax.set_ylim(-0.05,1)
+for i in ['top', 'left', 'right', 'bottom']:
+    ax.spines[i].set_linewidth(1.6)
+    
+ax.minorticks_on()
+ax.tick_params(axis='y', which='major', labelsize=19, width = 1.7, size = 8,pad=10)
+ax.tick_params(axis='y', which='minor', width = 1.2, size = 5)        
+ax.tick_params(axis='x', which='minor',bottom=False)        
+ax.legend(fontsize=13,bbox_to_anchor=(1.01,0.5))
+#ax.set_xscale('log')
+#ax.set_yscale('log')
+
+#plt.savefig('figures/fa_against_proton_states_pei.png', dpi = 1000, bbox_inches='tight')    
+
+
+# In[60]:
+
+
+#upto_ind_run=1
+g = sns.jointplot(data=GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run],
+            x='Rg/Rg_mean',y='ratio')
+g.plot_joint(sns.kdeplot, color="r", zorder=10, levels=[0.01])
+
+
+# In[42]:
+
+
+#this is for single chain length
+def protein_3dplot_against_GW_specific_chain_length(protein_var,protein_label,second_obj,GW_chain_length,stepx,stepy):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_equil_chain_rg_ree.copy().sort_values(by='chain_length')
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+    chain_length= GW_chain_length
+    x=testeq_GW[(testeq_GW.chain_length==chain_length)  ]['Rg/Rg_mean']
+    y=testeq_GW[(testeq_GW.chain_length==chain_length)  ].ratio
+    x_polmodel_GW.append(x)
+    y_polmodel_GW.append(y)
+
+
+
+    if second_obj=='protein':        
+        temp_protein =  protein_var.copy()
+
+        for sim in temp_protein.sim.unique():
+            x_total.append(temp_protein[temp_protein.sim==sim].Rg.values/temp_protein[temp_protein.sim==sim].Rg.mean())
+            y_total.append(temp_protein[temp_protein.sim==sim].ratio.values)                    
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+    raise_max_ylim=30-testeq_GW.ratio.max()
+    raise_max_xlim=3-testeq_GW['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=testeq_GW.ratio.min()
+    min_xlim_rg_rg_mean=testeq_GW['Rg/Rg_mean'].min()
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='green',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'green',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'green',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=stepx
+    step_y=stepy
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    axTemperature.text(0.5,0.65,
+                       'chain length = '+str(GW_chain_length),
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart    
+    global fa_protein_pol,common_i,non_overlap_GW,non_overlap_protein,fa_protein_common_box
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    common_i=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein != 0)))
+    non_overlap_GW=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein == 0)))
+    non_overlap_protein=np.column_stack(np.where(np.logical_and(grid_GW == 0, grid_protein != 0)))
+    fa_protein_common_box=common_i.shape[0]/np.count_nonzero(grid_GW)
+    print(fa_protein_pol,str(len(x_total)),str(len(x_polmodel_GW)),'GW chain length =',GW_chain_length)
+
+
+#    axTemp_legend=axTemperature.legend(fontsize=15,
+#                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15)
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'green')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# In[43]:
+
+
+#this is for single chain length
+def plot_3d_protein_specific_trajectory(protein_var,protein_label,second_obj,trajectory_list,
+                                stepx,stepy):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_equil_chain_rg_ree.copy().sort_values(by='chain_length')
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+
+    x=testeq_GW['Rg/Rg_mean']
+    y=testeq_GW.ratio
+    x_polmodel_GW.append(x)
+    y_polmodel_GW.append(y)
+
+
+
+    if second_obj=='protein':        
+        temp_protein =  protein_var.copy()
+
+        for sim in trajectory_list:
+            x_total.append(temp_protein[temp_protein.sim==sim].Rg.values/temp_protein[temp_protein.sim==sim].Rg.mean())
+            y_total.append(temp_protein[temp_protein.sim==sim].ratio.values)                    
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+    raise_max_ylim=30-testeq_GW.ratio.max()
+    raise_max_xlim=3-testeq_GW['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=testeq_GW.ratio.min()
+    min_xlim_rg_rg_mean=testeq_GW['Rg/Rg_mean'].min()
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='green',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'green',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'green',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=stepx
+    step_y=stepy
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart    
+    global fa_protein_pol,common_i,non_overlap_GW,non_overlap_protein,fa_protein_common_box
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    common_i=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein != 0)))
+    non_overlap_GW=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein == 0)))
+    non_overlap_protein=np.column_stack(np.where(np.logical_and(grid_GW == 0, grid_protein != 0)))
+    fa_protein_common_box=common_i.shape[0]/np.count_nonzero(grid_GW)
+    print(fa_protein_pol,str(len(x_total)),str(len(x_polmodel_GW)),'protein traj combination =',trajectory_list)
+
+
+#    axTemp_legend=axTemperature.legend(fontsize=15,
+#                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15)
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'green')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# In[44]:
+
+
+
+def only_protein_every_ith_snapshot(protein_var,protein_label,second_obj,every_ith_snap,stepx,stepy):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_equil_chain_rg_ree.copy().sort_values(by='chain_length')
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+  
+    x_polmodel_GW.append(testeq_GW['Rg/Rg_mean'])
+    y_polmodel_GW.append(testeq_GW['ratio'])
+
+    if second_obj=='protein':   
+        temp_protein=protein_var.copy()
+        x_total.append(temp_protein['Rg/Rg_mean'].iloc[::every_ith_snap])
+        y_total.append(temp_protein['ratio'].iloc[::every_ith_snap])                    
+
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+    raise_max_ylim=30-testeq_GW.ratio.max()
+    raise_max_xlim=3-testeq_GW['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=testeq_GW.ratio.min()
+    min_xlim_rg_rg_mean=testeq_GW['Rg/Rg_mean'].min()
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='green',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'green',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'green',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=stepx
+    step_y=stepy
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    axTemperature.text(0.25,0.65,
+                       '# of total snapshots = '+ str(len(x_polmodel_GW)),
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart    
+    global fa_protein_pol,common_i,non_overlap_GW,non_overlap_protein,fa_protein_common_box
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    common_i=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein != 0)))
+    non_overlap_GW=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein == 0)))
+    non_overlap_protein=np.column_stack(np.where(np.logical_and(grid_GW == 0, grid_protein != 0)))
+    fa_protein_common_box=common_i.shape[0]/np.count_nonzero(grid_GW)
+    print(fa_protein_pol,str(len(x_total)),str(len(x_polmodel_GW)))
+
+
+
+
+#    axTemp_legend=axTemperature.legend(fontsize=15,
+#                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15)
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'green')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# In[45]:
+
+
+#this is for single chain length
+def protein_3dplot_against_GW_every_ith_snapshot(protein_var,protein_label,second_obj,every_ith_snap,stepx,stepy):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_equil_chain_rg_ree.copy().sort_values(by='chain_length')
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+  
+    x_polmodel_GW.append(testeq_GW['Rg/Rg_mean'].iloc[::every_ith_snap])
+    y_polmodel_GW.append(testeq_GW['ratio'].iloc[::every_ith_snap])
+
+    if second_obj=='protein':        
+        temp_protein =  protein_var.copy()
+        for sim in temp_protein.sim.unique():
+            x_total.append(temp_protein[temp_protein.sim==sim].Rg.values/temp_protein[temp_protein.sim==sim].Rg.mean())
+            y_total.append(temp_protein[temp_protein.sim==sim].ratio.values)                    
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+    raise_max_ylim=30-testeq_GW.ratio.max()
+    raise_max_xlim=3-testeq_GW['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=testeq_GW.ratio.min()
+    min_xlim_rg_rg_mean=testeq_GW['Rg/Rg_mean'].min()
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='green',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'green',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'green',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=stepx
+    step_y=stepy
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    axTemperature.text(0.25,0.65,
+                       '# of total snapshots = '+ str(len(x_polmodel_GW)),
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart    
+    global fa_protein_pol
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    print(fa_protein_pol,str(len(x_total)),str(len(x_polmodel_GW)))
+#    axTemp_legend=axTemperature.legend(fontsize=15,
+#                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15)
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'green')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# In[46]:
+
+
+#this is for single chain length
+def protein_3dplot_against_GW_ind_runs(GW_var,protein_var,protein_label,
+                                                          second_obj,ind_run_number,stepx,stepy):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_var.copy()
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+  
+    x_polmodel_GW.append(testeq_GW[testeq_GW.run_number==ind_run_number]['Rg/Rg_mean'])
+    y_polmodel_GW.append(testeq_GW[testeq_GW.run_number==ind_run_number]['ratio'])
+
+    if second_obj=='protein':        
+        temp_protein =  protein_var.copy()
+        for sim in temp_protein.sim.unique():
+            x_total.append(temp_protein[temp_protein.sim==sim].Rg.values/temp_protein[temp_protein.sim==sim].Rg.mean())
+            y_total.append(temp_protein[temp_protein.sim==sim].ratio.values)                    
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+    raise_max_ylim=30-GW_equil_chain_rg_ree.ratio.max()
+    raise_max_xlim=3-GW_equil_chain_rg_ree['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=GW_equil_chain_rg_ree.ratio.min()
+    min_xlim_rg_rg_mean=GW_equil_chain_rg_ree['Rg/Rg_mean'].min()
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='green',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'green',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'green',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=stepx
+    step_y=stepy
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    axTemperature.text(0.25,0.65,
+                       '# of GW total snapshots = '+ str(len(x_polmodel_GW))+f'\nchain_length = {GW_var.chain_length.unique()[0]}',
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart    
+    global fa_protein_pol,common_i,non_overlap_GW,non_overlap_protein,fa_protein_common_box
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    common_i=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein != 0)))
+    non_overlap_GW=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein == 0)))
+    non_overlap_protein=np.column_stack(np.where(np.logical_and(grid_GW == 0, grid_protein != 0)))
+    fa_protein_common_box=common_i.shape[0]/np.count_nonzero(grid_GW)
+    print(fa_protein_pol,str(len(x_total)),str(len(x_polmodel_GW)),stepx)
+
+    axTemp_legend=axTemperature.legend(fontsize=15,
+                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15)
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'green')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# In[47]:
+
+
+#this is for single chain length
+def protein_3dplot_against_GW_cumulative_chain_length(protein_var,protein_label,second_obj,upto_chain_length,
+                                                     stepx,stepy):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_equil_chain_rg_ree.copy().sort_values(by='chain_length')
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+  
+    x_polmodel_GW.append(testeq_GW[testeq_GW.chain_length<=upto_chain_length]['Rg/Rg_mean'])
+    y_polmodel_GW.append(testeq_GW[testeq_GW.chain_length<=upto_chain_length]['ratio'])
+
+    if second_obj=='protein':        
+        temp_protein =  protein_var.copy()
+        for sim in temp_protein.sim.unique():
+            x_total.append(temp_protein[temp_protein.sim==sim].Rg.values/temp_protein[temp_protein.sim==sim].Rg.mean())
+            y_total.append(temp_protein[temp_protein.sim==sim].ratio.values)                    
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+    raise_max_ylim=30-testeq_GW.ratio.max()
+    raise_max_xlim=3-testeq_GW['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=testeq_GW.ratio.min()
+    min_xlim_rg_rg_mean=testeq_GW['Rg/Rg_mean'].min()
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='green',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'green',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'green',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=stepx
+    step_y=stepy
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    axTemperature.text(0.25,0.65,
+                       '# of total snapshots = '+ str(len(x_polmodel_GW)),
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart        
+    global fa_protein_pol,common_i,non_overlap_GW,non_overlap_protein,fa_protein_common_box
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    common_i=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein != 0)))
+    non_overlap_GW=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein == 0)))
+    non_overlap_protein=np.column_stack(np.where(np.logical_and(grid_GW == 0, grid_protein != 0)))
+    fa_protein_common_box=common_i.shape[0]/np.count_nonzero(grid_GW)
+    print(fa_protein_pol,str(len(x_total)),str(len(x_polmodel_GW)),upto_chain_length)
+
+#    axTemp_legend=axTemperature.legend(fontsize=15,
+#                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15)
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'green')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# In[48]:
+
+
+#this is for single chain length
+def protein_3dplot_against_GW_cumulative_ind_run(GW_var,protein_var,protein_label,second_obj,upto_ind_run,
+                                                     stepx,stepy):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_var.copy()
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+  
+    x_polmodel_GW.append(testeq_GW[testeq_GW.run_number<=upto_ind_run]['Rg/Rg_mean'])
+    y_polmodel_GW.append(testeq_GW[testeq_GW.run_number<=upto_ind_run]['ratio'])
+
+    if second_obj=='protein':        
+        temp_protein =  protein_var.copy()
+        for sim in temp_protein.sim.unique():
+            x_total.append(temp_protein[temp_protein.sim==sim].Rg.values/temp_protein[temp_protein.sim==sim].Rg.mean())
+            y_total.append(temp_protein[temp_protein.sim==sim].ratio.values)                    
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+    raise_max_ylim=30-GW_equil_chain_rg_ree.ratio.max()
+    raise_max_xlim=3-GW_equil_chain_rg_ree['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=GW_equil_chain_rg_ree.ratio.min()
+    min_xlim_rg_rg_mean=GW_equil_chain_rg_ree['Rg/Rg_mean'].min()
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='green',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'green',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'green',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=stepx
+    step_y=stepy
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    axTemperature.text(0.25,0.65,
+                       '# of total snapshots = '+ str(len(x_polmodel_GW)),
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart    
+    global fa_protein_pol,common_i,non_overlap_GW,non_overlap_protein,fa_protein_common_box
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    common_i=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein != 0)))
+    non_overlap_GW=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein == 0)))
+    non_overlap_protein=np.column_stack(np.where(np.logical_and(grid_GW == 0, grid_protein != 0)))
+    fa_protein_common_box=common_i.shape[0]/np.count_nonzero(grid_GW)
+    print(fa_protein_pol,str(len(x_total)),str(len(x_polmodel_GW)),upto_ind_run)
+#    axTemp_legend=axTemperature.legend(fontsize=15,
+#                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15)
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'green')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# In[49]:
+
+
+# def protein_3dplot_against_GW_select_no_snapshots(protein_var,protein_label,second_obj,
+#                                                    GW_every_how_many_snaps,
+#                                                    protein_every_how_many_snaps,n_iter):
+#     #different from the SAW+protein plots be careful
+#     # Define the x and y data 
+#     #be careful when doing select all and replace
+
+
+#     x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+#     y_variable="Instantaneous Shape Ratio"
+
+
+
+#     epas_cutoff=0
+
+#     %time
+#     %matplotlib inline
+#     plt.rcParams["font.weight"] = "regular"
+#     plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+  
+#     global fa_values_all_iter
+#     fa_values_all_iter=[]
+#     scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+#     for iter_ in range(n_iter):
+#         x_polmodel_GW=[]
+#         y_polmodel_GW=[]
+#         x_total=[]
+#         y_total=[]
+#         testeq_GW=GW_equil_chain_rg_ree.copy().sort_values(by='chain_length')
+#         #collect all index values, shuffle them randomly
+#         #PAY ATTENTION TO .copy() after GW or protein variable
+#         snapshot_index_values_GW=testeq_GW.copy().index.values
+#         np.random.shuffle(snapshot_index_values_GW)
+#         selected_snapshots_GW=snapshot_index_values_GW[0:GW_every_how_many_snaps]
+#         x=testeq_GW.loc[selected_snapshots_GW]['Rg/Rg_mean']
+#         y=testeq_GW.loc[selected_snapshots_GW].ratio
+#         x_polmodel_GW.append(x)
+#         y_polmodel_GW.append(y)
+
+
+
+#         if second_obj=='protein':        
+#             temp_protein =  protein_var.copy()
+#             #collect all index values, shuffle them randomly
+#             #PAY ATTENTION TO .copy() after GW or protein variable
+#             snapshot_index_values_protein=temp_protein.copy().index.values
+#             np.random.shuffle(snapshot_index_values_protein)
+#             selected_snapshots_protein=snapshot_index_values_protein[0:protein_every_how_many_snaps]
+
+#             x_total.append(temp_protein.loc[selected_snapshots_protein]['Rg/Rg_mean'])
+#             y_total.append(temp_protein.loc[selected_snapshots_protein].ratio.values)
+#             del temp_protein
+#     #     elif second_obj=='polymer_model':
+#     #         testeq_pol = protein_var.copy()
+#     #         epas_cutoff=  float(input('enter epas value'))      
+
+#     #         j=0
+#     #         for chain_length in testeq_pol.chain_length.unique():
+#     #             for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+#     #                 if epas==epas_cutoff:
+#     #                     x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+#     #                     y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+#     #                     x_total.append(x)
+#     #                     y_total.append(y)
+
+#     #                     j+=1        
+
+#     #         del epas_cutoff, testeq_pol
+#     #     elif second_obj=='pei':
+#     #         testeq_pol = protein_var.copy()
+#     #         proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+#     #         x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+#     #         y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+#     #         x_total.append(x)
+#     #         y_total.append(y)
+
+#     #         del proton_cutoff, testeq_pol
+
+#         else:
+#             print('ERROR. FIX ERROR')
+
+
+#         #no more mention of epas beyond this point   
+
+#         x_total=list(chain.from_iterable(x_total))
+
+#         y_total=list(chain.from_iterable(y_total))
+
+#         x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+#         y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+
+#         #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+#         raise_max_ylim=30-testeq_GW.ratio.max()
+#         raise_max_xlim=3-testeq_GW['Rg/Rg_mean'].max()
+#         max_ylim_ratio=30
+#         max_xlim_rg_rg_mean=3
+#         min_ylim_ratio=testeq_GW.ratio.min()
+#         min_xlim_rg_rg_mean=testeq_GW['Rg/Rg_mean'].min()
+#         del testeq_GW
+
+
+#         #must use polmodel_GW as the denominator here.
+#         #original_n_divisions=100
+#         step_x=0.02
+#         step_y=0.2
+#         max_value_x=max_xlim_rg_rg_mean
+#         n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+#         max_value_y=max_ylim_ratio
+#         n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+#         gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+#         gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+#         global grid_protein, grid_GW
+#         grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+#         grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+
+
+#         fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+#         fa_protein_pol=float(fa_protein_pol)
+#         fa_values_all_iter.append(fa_protein_pol)
+    
+#     return fa_values_all_iter
+
+
+# In[50]:
+
+
+#this is for single chain length
+def protein_3dplot_against_GW_protein_GW_ith_snapshot(protein_var,protein_label,second_obj,every_ith_snap,
+                                                     stepx,stepy):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_equil_chain_rg_ree.copy().sort_values(by='chain_length')
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+  
+    x_polmodel_GW.append(testeq_GW.iloc[::every_ith_snap]['Rg/Rg_mean'].values)
+    y_polmodel_GW.append(testeq_GW.iloc[::every_ith_snap]['ratio'].values)
+
+    if second_obj=='protein':        
+        temp_protein =  protein_var.copy()
+        #taking out 4000 snapshots for each trajectory in protein (assuming ab40) to make it 180000 which is GW #
+        temp_protein = temp_protein[temp_protein.frames>4000].copy()
+        x_total.append(temp_protein['Rg/Rg_mean'].iloc[::every_ith_snap])
+        y_total.append(temp_protein['ratio'].iloc[::every_ith_snap])                    
+        print('protein frames >4000 used')
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+    raise_max_ylim=30-testeq_GW.ratio.max()
+    raise_max_xlim=3-testeq_GW['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=testeq_GW.ratio.min()
+    min_xlim_rg_rg_mean=testeq_GW['Rg/Rg_mean'].min()
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='yellow',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'yellow',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'yellow',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=stepx
+    step_y=stepy
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    axTemperature.text(0.01,0.95,
+                       '# of protein snapshots = '+ str(len(x_total)),
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart    
+    global fa_protein_pol,common_i,non_overlap_GW,non_overlap_protein,fa_protein_common_box
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    common_i=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein != 0)))
+    non_overlap_GW=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein == 0)))
+    non_overlap_protein=np.column_stack(np.where(np.logical_and(grid_GW == 0, grid_protein != 0)))
+    fa_protein_common_box=common_i.shape[0]/np.count_nonzero(grid_GW)
+    print(fa_protein_pol,str(len(x_total)),str(len(x_polmodel_GW)))#    axTemp_legend=axTemperature.legend(fontsize=15,
+#                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15,bbox_to_anchor=(0.65,0.7))
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'yellow')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# In[51]:
+
+
+#this is for single chain length
+def protein_3dplot_against_GW_change_stepx(protein_var,protein_label,second_obj,stepx):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_equil_chain_rg_ree.copy().sort_values(by='chain_length')
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+  
+    x_polmodel_GW.append(testeq_GW['Rg/Rg_mean'].values)
+    y_polmodel_GW.append(testeq_GW['ratio'].values)
+
+    if second_obj=='protein':        
+        temp_protein =  protein_var.copy()
+        #taking out 4000 snapshots for each trajectory in protein (assuming ab40) to make it 180000 which is GW #
+        temp_protein = temp_protein[temp_protein.frames>4000].copy()
+        x_total.append(temp_protein['Rg/Rg_mean'].values)
+        y_total.append(temp_protein['ratio'].values)   
+        print('protein frames >4000 used')        
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+    raise_max_ylim=30-testeq_GW.ratio.max()
+    raise_max_xlim=3-testeq_GW['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=testeq_GW.ratio.min()
+    min_xlim_rg_rg_mean=testeq_GW['Rg/Rg_mean'].min()
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='yellow',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'yellow',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'yellow',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=stepx
+    step_y=0.2
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    axTemperature.text(0.01,0.95,
+                       '# of protein snapshots = '+ str(len(x_total)),
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart    
+    global fa_protein_pol,common_i,non_overlap_GW,non_overlap_protein,fa_protein_common_box
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    common_i=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein != 0)))
+    non_overlap_GW=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein == 0)))
+    non_overlap_protein=np.column_stack(np.where(np.logical_and(grid_GW == 0, grid_protein != 0)))
+    fa_protein_common_box=common_i.shape[0]/np.count_nonzero(grid_GW)
+    print(fa_protein_pol,str(len(x_total)),str(len(x_polmodel_GW)),stepx)
+#    axTemp_legend=axTemperature.legend(fontsize=15,
+#                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15,bbox_to_anchor=(0.65,0.7))
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'yellow')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# In[52]:
+
+
+#this is for single chain length
+def protein_3dplot_against_GW_change_stepy(protein_var,protein_label,second_obj,stepy):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_equil_chain_rg_ree.copy().sort_values(by='chain_length')
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+  
+    x_polmodel_GW.append(testeq_GW['Rg/Rg_mean'].values)
+    y_polmodel_GW.append(testeq_GW['ratio'].values)
+
+    if second_obj=='protein':        
+        temp_protein =  protein_var.copy()
+        #taking out 4000 snapshots for each trajectory in protein (assuming ab40) to make it 180000 which is GW #
+        temp_protein = temp_protein[temp_protein.frames>4000].copy()
+        x_total.append(temp_protein['Rg/Rg_mean'].values)
+        y_total.append(temp_protein['ratio'].values)
+        print('protein frames >4000 used')        
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+    raise_max_ylim=30-testeq_GW.ratio.max()
+    raise_max_xlim=3-testeq_GW['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=testeq_GW.ratio.min()
+    min_xlim_rg_rg_mean=testeq_GW['Rg/Rg_mean'].min()
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='yellow',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'yellow',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'yellow',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=0.02
+    step_y=stepy
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    axTemperature.text(0.01,0.95,
+                       '# of protein snapshots = '+ str(len(x_total)),
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart    
+    global fa_protein_pol,common_i,non_overlap_GW,non_overlap_protein,fa_protein_common_box
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    common_i=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein != 0)))
+    non_overlap_GW=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein == 0)))
+    non_overlap_protein=np.column_stack(np.where(np.logical_and(grid_GW == 0, grid_protein != 0)))
+    fa_protein_common_box=common_i.shape[0]/np.count_nonzero(grid_GW)
+    print(fa_protein_pol,str(len(x_total)),str(len(x_polmodel_GW)),stepy)
+    
+#    axTemp_legend=axTemperature.legend(fontsize=15,
+#                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15,bbox_to_anchor=(0.65,0.7))
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'yellow')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# In[83]:
+
+
+
+def protein_every_ith_snapshot_gridbox_square(GW_ind_var,
+                                              protein_var,truncate_frames,protein_label,second_obj,every_ith_snap,
+                                              upto_ind_run,stepx):
+    #different from the SAW+protein plots be careful
+    # Define the x and y data 
+    #be careful when doing select all and replace
+
+    print('ATTENTION: function modified frequently')
+    x_variable=r'$R_g\left/R_g^{mean}\right.$' 
+    y_variable="Instantaneous Shape Ratio"
+
+
+
+    epas_cutoff=0
+    testeq_GW=GW_equil_chain_rg_ree.copy().sort_values(by='chain_length')
+    
+    get_ipython().run_line_magic('matplotlib', 'inline')
+    plt.rcParams["font.weight"] = "regular"
+    plt.rcParams["axes.labelweight"] = "regular"
+    
+    
+    x_polmodel_GW=[]
+    y_polmodel_GW=[]
+    x_total=[]
+    y_total=[]
+
+    scatter_markers=['d','x',4,'o','v','^','1','8','s','p','P','*','X','D',9]
+
+
+
+    #get chain_length from definition (def) line
+  
+    x_polmodel_GW.append(GW_ind_var[GW_ind_var.run_number<=upto_ind_run]['Rg/Rg_mean'].iloc[::every_ith_snap])
+    y_polmodel_GW.append(GW_ind_var[GW_ind_var.run_number<=upto_ind_run]['ratio'].iloc[::every_ith_snap])
+
+    if second_obj=='protein':   
+        temp_protein=protein_var.copy()
+        change_frame=truncate_frames-1+temp_protein.frames.min()
+        temp_protein=temp_protein[temp_protein.frames>change_frame]
+        print(protein_label,' frames less than ',str(change_frame),' truncated')    
+        x_total.append(temp_protein['Rg/Rg_mean'].iloc[::every_ith_snap])
+        y_total.append(temp_protein['ratio'].iloc[::every_ith_snap])                    
+
+        del temp_protein
+    elif second_obj=='polymer_model':
+        testeq_pol = protein_var.copy()
+        epas_cutoff=  float(input('enter epas value'))      
+
+        j=0
+        for chain_length in testeq_pol.chain_length.unique():
+            for epas in testeq_pol[testeq_pol.chain_length==chain_length].sort_values(by='epas').epas.unique():
+                if epas==epas_cutoff:
+                    x=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5/((testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].Rg2**0.5).mean())
+                    y=testeq_pol[(testeq_pol.chain_length==chain_length) & (testeq_pol.epas==epas) ].ratio
+                    x_total.append(x)
+                    y_total.append(y)
+
+                    j+=1        
+        
+        del epas_cutoff, testeq_pol
+    elif second_obj=='pei':
+        testeq_pol = protein_var.copy()
+        proton_cutoff=  float(input('enter protonation state'))      
+
+
+
+        x=testeq_pol[(testeq_pol.proton==proton_cutoff)  ]['Rg/Rg_mean']
+        y=testeq_pol[(testeq_pol.proton==proton_cutoff)  ].ratio
+        x_total.append(x)
+        y_total.append(y)
+        
+        del proton_cutoff, testeq_pol
+        
+    else:
+        print('ERROR. FIX ERROR')
+
+
+    #no more mention of epas beyond this point   
+
+    x_total=list(chain.from_iterable(x_total))
+    y_total=list(chain.from_iterable(y_total))
+    x_polmodel_GW=list(chain.from_iterable(x_polmodel_GW))
+    y_polmodel_GW=list(chain.from_iterable(y_polmodel_GW))
+    #for grid box area calculation, extending xlim and ylim to 3 and 30 respectively
+#    raise_max_ylim=30-testeq_GW.ratio.max()
+#    raise_max_xlim=3-testeq_GW['Rg/Rg_mean'].max()
+    max_ylim_ratio=30
+    max_xlim_rg_rg_mean=3
+    min_ylim_ratio=0
+    min_xlim_rg_rg_mean=0
+
+    #deleting x_polmodel_SAW and y_polmodel_SAW because they are no longer needed.
+    #these two variables were added so that this cell was similar to SAW uncollapsed 3d plot cell
+    del testeq_GW
+
+    
+
+    # Set up default x and y limits
+    xlims = [min_xlim_rg_rg_mean,
+             max_xlim_rg_rg_mean]
+    ylims = [min_ylim_ratio,
+             max_ylim_ratio]
+
+    # Set up your x and y labels
+    xlabel = x_variable
+    ylabel = y_variable
+
+    # Define the locations for the axes
+
+    left, width = 0.12, 0.55
+    bottom, height = 0.12, 0.55
+    bottom_h = left_h = left+width
+    rect_temperature = [left, bottom, width, height] # dimensions of temp plot
+    rect_histx = [left, bottom_h, width, 0.25] # dimensions of x-histogram
+    rect_histy = [left_h, bottom, 0.25, height] # dimensions of y-histogram
+
+
+    # Set up the size of the figure
+    fig = plt.figure(1, figsize=(9.5,9))
+
+    # Make the three plots
+    axTemperature = plt.axes(rect_temperature) # temperature plot
+    axHistx = plt.axes(rect_histx) # x histogram
+    axHisty = plt.axes(rect_histy) # y histogram
+
+
+    axHistx.axes.get_xaxis().set_visible(False)
+    axHisty.axes.get_yaxis().set_visible(False)
+
+
+    # Find the min/max of the data
+    xmin = min(xlims)
+    xmax = max(xlims)
+    ymin = min(ylims)
+    ymax = max(ylims)
+
+    # Remove the inner axes numbers of the histograms
+    nullfmt = NullFormatter()
+    #
+    # Define the number of bins
+    nxbins = 100
+    nybins = 50
+    nbins = nxbins+nybins
+
+    xbins = linspace(start = xmin, stop = xmax, num = nxbins)
+    ybins = linspace(start = ymin, stop = ymax, num = nybins)
+    xcenter = (xbins[0:-1]+xbins[1:])/2.0
+    ycenter = (ybins[0:-1]+ybins[1:])/2.0
+    aspectratio = (1.0*(xmax - 0))/(1.38*ymax - 0)
+
+
+    X = xcenter
+    Y = ycenter
+
+    axTemperature.scatter(x_polmodel_GW,y_polmodel_GW,
+                      marker=scatter_markers[3],s=40,alpha=0.6,color='black',
+                       label='GW')
+    
+    axTemperature.scatter(x_total,
+               y_total,
+               marker=scatter_markers[0],s=40,alpha=0.6,color='green',
+                                      label=protein_label)                
+
+
+
+    #Plot the axes labels
+    axTemperature.set_xlabel(xlabel,fontsize=20)
+    axTemperature.set_ylabel(ylabel,fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axTemperature.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    # ticklabels = axTemperature.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(18)
+    #     label.set_family('serif')
+
+    #Set up the plot limits
+    axTemperature.set_xlim(xlims)
+    axTemperature.set_ylim(ylims)
+
+    #Set up the histogram bins
+    xbins = np.arange(xmin, xmax, (xmax-xmin)/nbins)
+    ybins = np.arange(ymin, ymax, (ymax-ymin)/nbins)
+
+
+    axHistx.hist(x_polmodel_GW, bins=xbins, color = 'black',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+    axHistx.hist(x_total, bins=xbins, color = 'green',
+                label=protein_label,alpha=0.5,density=True)
+
+    axHisty.hist(y_polmodel_GW, bins=ybins, color = 'black',orientation='horizontal',
+                label='GW: All Chain Lengths',alpha=0.5,density=True)
+
+    axHisty.hist(y_total, bins=ybins, color = 'green',orientation='horizontal',
+                label=protein_label,alpha=0.5,density=True)
+    
+    
+    
+    #must use polmodel_GW as the denominator here.
+    #original_n_divisions=100
+    
+    
+    
+    step_x=stepx
+    step_y=10*step_x
+    max_value_x=max_xlim_rg_rg_mean
+    n_divisions_x=round((max_value_x-min_xlim_rg_rg_mean)/step_x)
+
+    max_value_y=max_ylim_ratio
+    n_divisions_y=round((max_value_y-min_ylim_ratio)/step_y)
+    gridx = np.linspace(min_xlim_rg_rg_mean, max_value_x, n_divisions_x)
+
+
+    gridy = np.linspace(min_ylim_ratio, max_value_y, n_divisions_y)
+    global grid_protein, grid_GW
+    grid_protein, _, _ = np.histogram2d(x_total, y_total, bins=[gridx, gridy])
+    grid_GW, _, _ = np.histogram2d(x_polmodel_GW, y_polmodel_GW, bins=[gridx, gridy])
+
+    axTemperature.text(0.7,0.75,
+                       '$f_A$= '+format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f'),
+                      transform=axTemperature.transAxes,fontsize=18)
+    axTemperature.text(0.25,0.65,
+                       '# of total snapshots = '+ str(len(x_polmodel_GW)),
+                      transform=axTemperature.transAxes,fontsize=18)
+    
+#made fa_protein_pol global so that i can save variables and use them for fa_summary bar chart    
+    global fa_protein_pol,common_i,non_overlap_GW,non_overlap_protein,fa_protein_common_box
+    fa_protein_pol=format(((np.count_nonzero(grid_protein)/grid_protein.size)/(np.count_nonzero(grid_GW)/grid_GW.size)),'0.3f')
+    fa_protein_pol=float(fa_protein_pol)
+    common_i=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein != 0)))
+    non_overlap_GW=np.column_stack(np.where(np.logical_and(grid_GW != 0, grid_protein == 0)))
+    non_overlap_protein=np.column_stack(np.where(np.logical_and(grid_GW == 0, grid_protein != 0)))
+    fa_protein_common_box=common_i.shape[0]/np.count_nonzero(grid_GW)
+    print(fa_protein_pol,'snapshots = ',str(len(x_polmodel_GW)),str(len(x_total)),
+          grid_protein.shape[0],grid_protein.shape[1],grid_GW.shape[0],grid_GW.shape[1])
+
+
+
+
+#    axTemp_legend=axTemperature.legend(fontsize=15,
+#                                       bbox_to_anchor=(1.4, 1.2))
+    axTemp_legend=axTemperature.legend(fontsize=15)
+
+    frame = axTemp_legend.get_frame()
+    frame.set_linewidth(1.6)
+    frame.set_edgecolor('black')
+    #axHisty.hist(y, bins=ybins, orientation='horizontal', color = 'green')
+
+
+
+
+
+
+    #Set up the histogram limits
+    axHistx.set_xlim( xmin, xmax )
+    axHisty.set_ylim( ymin, ymax )
+
+    axHistx.set_ylabel('Prob. Density',fontsize=20)
+    axHisty.set_xlabel('Prob. Density',fontsize=20)
+
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHistx.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+    # #Make the tickmarks pretty    
+    # ticklabels = axHistx.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')    
+
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_xticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+    # #Make the tickmarks pretty
+    # ticklabels = axHisty.get_yticklabels()
+    # for label in ticklabels:
+    #     label.set_fontsize(12)
+    #     label.set_family('serif')
+
+
+    #Cool trick that changes the number of tickmarks for the histogram axes
+    axHisty.xaxis.set_major_locator(MaxNLocator(4))
+    axHistx.yaxis.set_major_locator(MaxNLocator(3))
+
+    for i in ['top', 'left', 'right', 'bottom']:
+        axHistx.spines[i].set_linewidth(1.6)
+        axHisty.spines[i].set_linewidth(1.6)
+        axTemperature.spines[i].set_linewidth(1.6)
+
+    axHistx.minorticks_on()
+    axHistx.tick_params(axis='y', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axHistx.tick_params(axis='y', which='minor', width = 1.2, size = 5)
+    axHisty.minorticks_on()
+    axHisty.tick_params(axis='x', which='major', labelsize=18, width = 1.7, size = 8,pad=10,labelrotation=270)
+    axHisty.tick_params(axis='x', which='minor', width = 1.2, size = 5)
+    axTemperature.minorticks_on()
+    axTemperature.tick_params(axis='both', which='major', labelsize=18, width = 1.7, size = 8,pad=10)
+    axTemperature.tick_params(axis='both', which='minor', width = 1.2, size = 5)   
+    plt.setp(axTemperature.get_yticklabels()[-1], visible=False)
+    plt.setp(axTemperature.get_xticklabels()[-1], visible=False)
+    #fig.subplots_adjust(hspace=0.85,wspace=0.85)
+
+
+
+
+
+    # Save to a File
+    filename = 'GW_3d_plot'
+    #plt.savefig(f'figures/GW_{protein_label}_3dplot.png', dpi = 1000, bbox_inches='tight')
+    return 
+
+
+# # 3rd new definition by Jesse
+# 
+
+# In[70]:
+
+
+plt.scatter(GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run]['Rg/Rg_mean'].values,
+            GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run]['ratio'].values,
+            color='black')
+plt.scatter(salmon_rg_ree_ratheatmap['Rg/Rg_mean'].values,
+            salmon_rg_ree_ratheatmap['ratio'].values,
+            color='magenta',alpha=0.05)
+
+
+# In[42]:
+
+
+upto_ind_run=21
+po_x=GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run]['Rg/Rg_mean'].values
+
+po_x=(po_x-np.mean(po_x))/np.std(po_x)
+
+po_y=GW_ind_runs_chainlen100[GW_ind_runs_chainlen100.run_number<=upto_ind_run]['ratio'].values
+
+po_y=(po_y-np.mean(po_y))/np.std(po_y)
+GW_points=np.c_[po_x, po_y]
+
+plt.scatter(po_x,po_y)
+
+
+# In[43]:
+
+
+pro_x=salmon_rg_ree_ratheatmap['Rg/Rg_mean'].values
+
+pro_x=(pro_x-np.mean(pro_x))/np.std(pro_x)
+
+pro_y=salmon_rg_ree_ratheatmap['ratio'].values
+
+pro_y=(pro_y-np.mean(pro_y))/np.std(pro_y)
+
+salmon_points=np.c_[pro_x, pro_y]
+plt.scatter(po_x,po_y,color='black')
+plt.scatter(pro_x,pro_y,color='magenta',alpha=0.05)
+
+
+# In[ ]:
+
+
+tree_GW=spatial.cKDTree(GW_points)
+tree_salmon=spatial.cKDTree(salmon_points)
+
+indexes = tree_salmon.query_ball_tree(tree_GW, r=0.5)
+
+
+# In[ ]:
+
+
+radius_=0.5
+tree_GW=spatial.cKDTree(GW_points)
+tree_salmon=spatial.cKDTree(salmon_points)
+
+
+GW_points_within_range=np.array([])
+not_in_range=[]
+
+for point in salmon_points:
+    checking_GW_points=tree_GW.query_ball_point(point,radius_)
+    if not checking_GW_points:
+        not_in_range.append(point)
+    else:
+        GW_points_within_range=np.append(GW_points_within_range,checking_GW_points)
+        GW_points_within_range=np.unique(GW_points_within_range)
+    del checking_GW_points
+
+
+
+# In[ ]:
+
+
+for point in not_in_range:
+    plt.scatter(point[0],point[1],color='red')
+plt.scatter(po_x,po_y,color='black')    
+
+
+# In[45]:
+
+
+def fA_using_cdist(protein_var,GW_var,upto_ind_run,every_ith_snap,radius_):
+
+    po_x=GW_var[GW_var.run_number<=upto_ind_run]['Rg/Rg_mean'].values
+    po_y=GW_var[GW_var.run_number<=upto_ind_run]['ratio'].values
+
+    po_x=(po_x-np.mean(po_x))/np.std(po_x)    
+    po_y=(po_y-np.mean(po_y))/np.std(po_y)
+    
+    GW_points=np.c_[po_x, po_y]
+
+    plt.scatter(po_x,po_y,color='black')
+
+    pro_x=protein_var['Rg/Rg_mean'].values[::every_ith_snap]
+    pro_y=protein_var['ratio'].values[::every_ith_snap]
+    
+    pro_x=(pro_x-np.mean(pro_x))/np.std(pro_x)
+    pro_y=(pro_y-np.mean(pro_y))/np.std(pro_y)
+
+    protein_points=np.c_[pro_x, pro_y]
+    plt.scatter(po_x,po_y,color='black')
+    plt.scatter(pro_x,pro_y,color='magenta',alpha=0.05)
+
+    tree_GW=spatial.cKDTree(GW_points)
+    tree_protein=spatial.cKDTree(protein_points)
+
+
+    GW_points_within_range=np.array([])
+    not_in_range=[]
+    j = 0
+    for point in protein_points:
+        checking_GW_points=tree_GW.query_ball_point(point,radius_)
+        if not checking_GW_points:
+            not_in_range.append(point)
+        else:
+            GW_points_within_range=np.append(GW_points_within_range,checking_GW_points)
+            GW_points_within_range=np.unique(GW_points_within_range)
+        del checking_GW_points
+        j+=1
+        if j%100000==0:
+            print(f'{j} protein snapshots completed')
+
+    print(f'{((len(not_in_range)/protein_points.shape[0])*100)}% of protein snapshots not in range of GW')
+    fA_value = GW_points_within_range.shape[0]/GW_points.shape[0]
+    
+    return fA_value
+    
+    
+
+
+# In[92]:
+
+
+fa_value_protein_snapshot=[]
+fa_value_GW_snapshot=[]
+
+
+# In[60]:
+
+
+fig, ax = plt.subplots() # note we must use plt.subplots, not plt.subplot
+#circle1 = plt.Circle((0, 0), 0.2, color='r')
+circle2 = plt.Circle((2.59519299, 1.87345894), 0.5, color='blue')
+#circle3 = plt.Circle((1, 1), 0.2, color='g', clip_on=False)
+
+
+# (or if you have an existing figure)
+# fig = plt.gcf()
+# ax = fig.gca()
+
+#ax.add_patch(circle1)
+ax.add_patch(circle2)
+#ax.add_patch(circle3)
+
+
+ax.scatter(2.59519299, 1.87345894,color='magenta')
+for point_ in tree.query_ball_point(salmon_points[0],0.5):
+    ax.scatter(GW_points[point_][0], GW_points[point_][1],color='black')
+
