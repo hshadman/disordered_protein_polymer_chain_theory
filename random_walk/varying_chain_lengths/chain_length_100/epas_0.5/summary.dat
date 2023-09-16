@@ -1,0 +1,21 @@
+ program is RWchain version of Sept 2022
+ The systems contain nch           1 length of chain         100
+ lattice size used         250         250         200
+ noequil          10 interval       25000 nosnap       30000
+ total iteration=nosnap+noequil       30011
+ seed used  1664163141  1664829719
+                 
+ summary for radius of guration
+ rgx2,rgy2,rgz2,rg2  0.59440864333332688       0.59457644333332693       0.59480642666666161        1.7837915133333153     
+ variance of rg2   6.8334436713374913E-002
+ error bars for rg2   2.9430240468335911E-003
+                
+ summary for end to end distance
+ rendx2,rendy2,rendz2,rend2   1.8703333333333334        1.8839999999999999        1.9122666666666666        5.6665999999999999     
+ variance of rend2   19.725111106666674     
+ error bars for rend2   5.0001580285272143E-002
+                
+ average Energy   55.271416666666667     
+ standard deivation or variance   30.201174659722255     
+ error bar   6.1870826660614914E-002
+ total CPU used   1486.32874     minutes
