@@ -1,0 +1,21 @@
+ program is SAWchain version of  APril 2022
+ The systems contain nch           1 length of chain          50
+ lattice size used         250         250         200
+ noequil          10 interval       25000 nosnap       30000
+ total iteration=nosnap+noequil       30011
+ seed used  1663004038  1663670616
+                 
+ summary for radius of guration
+ rgx2,rgy2,rgz2,rg2   2.8751684533333246        2.8734579866666627        2.8700842000000177        8.6187106400000051     
+ variance of rg2   15.873017109134480     
+ error bars for rg2   4.4854264882176108E-002
+                
+ summary for end to end distance
+ rendx2,rendy2,rendz2,rend2   15.056500000000000        15.051733333333333        15.113899999999999        45.222133333333332     
+ variance of rend2   1592.7877234488890     
+ error bars for rend2  0.44931710401012781     
+                
+ average Energy   38.015666666666668     
+ standard deivation or variance   13.198887888888748     
+ error bar   4.0901823584981477E-002
+ total CPU used   61.2665787     minutes
